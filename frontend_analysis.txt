@@ -1,0 +1,1044 @@
+﻿==============================================
+FILE: package.json
+==============================================
+{
+  "name": "whatsapp-saas-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.19",
+    "axios": "^1.13.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^2.30.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.71.1",
+    "react-hot-toast": "^2.6.0",
+    "react-icons": "^4.12.0",
+    "react-router-dom": "^6.30.3",
+    "recharts": "^2.15.4",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^4.5.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "vite": "^5.0.0"
+  }
+}
+
+
+==============================================
+FILE: vite.config.js
+==============================================
+// frontend/vite.config.js
+
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000
+  }
+})
+
+==============================================
+FILE: src/main.jsx
+==============================================
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import App from './App.jsx'
+import './index.css'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </StrictMode>,
+)
+
+==============================================
+FILE: src/App.jsx
+==============================================
+import { useEffect } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { useAuthStore } from './store/authStore';
+
+// Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Contacts from './pages/Contacts';
+import Messages from './pages/Messages';
+import Templates from './pages/Templates';
+import Campaigns from './pages/Campaigns';
+import Settings from './pages/Settings';
+
+// Layout
+import Layout from './components/Layout';
+
+// Protected Route
+const ProtectedRoute = ({ children }) => {
+    const { isAuthenticated, isLoading } = useAuthStore();
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+            </div>
+        );
+    }
+
+    return isAuthenticated ? children : <Navigate to="/login" replace />;
+};
+
+// Public Route
+const PublicRoute = ({ children }) => {
+    const { isAuthenticated, isLoading } = useAuthStore();
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+            </div>
+        );
+    }
+
+    return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
+};
+
+function App() {
+    const { checkAuth } = useAuthStore();
+
+    useEffect(() => {
+        checkAuth();
+    }, [checkAuth]);
+
+    return (
+        <>
+            <Toaster position="top-right" />
+            <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+                <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+
+                {/* Protected Routes */}
+                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                    <Route index element={<Navigate to="/dashboard" replace />} />
+                    <Route path="dashboard" element={<Dashboard />} />
+                    <Route path="contacts" element={<Contacts />} />
+                    <Route path="messages" element={<Messages />} />
+                    <Route path="templates" element={<Templates />} />
+                    <Route path="campaigns" element={<Campaigns />} />
+                    <Route path="settings" element={<Settings />} />
+                </Route>
+
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+        </>
+    );
+}
+
+export default App;
+
+==============================================
+FILE: src/store/authStore.js
+==============================================
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import api from '../services/api';
+
+export const useAuthStore = create(
+    persist(
+        (set) => ({
+            user: null,
+            tenant: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: true,
+
+            login: async (email, password) => {
+                const response = await api.post('/auth/login', { email, password });
+                const { token, ...userData } = response.data.data;
+                
+                localStorage.setItem('token', token);
+                api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                
+                set({
+                    user: userData,
+                    tenant: userData.tenant,
+                    token,
+                    isAuthenticated: true,
+                    isLoading: false
+                });
+            },
+
+            register: async (formData) => {
+                const response = await api.post('/auth/register', formData);
+                const { token, ...userData } = response.data.data;
+                
+                localStorage.setItem('token', token);
+                api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                
+                set({
+                    user: userData,
+                    tenant: userData.tenant,
+                    token,
+                    isAuthenticated: true,
+                    isLoading: false
+                });
+            },
+
+            checkAuth: async () => {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    set({ isLoading: false, isAuthenticated: false });
+                    return;
+                }
+
+                try {
+                    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                    const response = await api.get('/auth/me');
+                    
+                    set({
+                        user: response.data.data,
+                        tenant: response.data.data.tenant,
+                        token,
+                        isAuthenticated: true,
+                        isLoading: false
+                    });
+                } catch (error) {
+                    localStorage.removeItem('token');
+                    delete api.defaults.headers.common['Authorization'];
+                    set({
+                        user: null,
+                        tenant: null,
+                        token: null,
+                        isAuthenticated: false,
+                        isLoading: false
+                    });
+                }
+            },
+
+            logout: () => {
+                localStorage.removeItem('token');
+                delete api.defaults.headers.common['Authorization'];
+                set({
+                    user: null,
+                    tenant: null,
+                    token: null,
+                    isAuthenticated: false,
+                    isLoading: false
+                });
+            }
+        }),
+        {
+            name: 'auth-storage',
+            partialize: (state) => ({
+                token: state.token,
+                user: state.user,
+                tenant: state.tenant,
+                isAuthenticated: state.isAuthenticated
+            })
+        }
+    )
+);
+
+==============================================
+FILE: src/services/api.js
+==============================================
+import axios from 'axios';
+
+const api = axios.create({
+    baseURL: 'http://localhost:5000/api',
+    headers: {
+        'Content-Type': 'application/json'
+    }
+});
+
+// Add token to requests
+const token = localStorage.getItem('token');
+if (token) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+}
+
+export default api;
+
+==============================================
+FILE: src/components/Layout.jsx
+==============================================
+import { useState } from 'react';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
+
+export default function Layout() {
+    const { user, logout } = useAuthStore();
+    const navigate = useNavigate();
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
+    };
+
+    const navItems = [
+        { path: '/dashboard', icon: '📊', label: 'Dashboard' },
+        { path: '/messages', icon: '💬', label: 'Messages' },
+        { path: '/contacts', icon: '👥', label: 'Contacts' },
+        { path: '/campaigns', icon: '📢', label: 'Campaigns' },
+        { path: '/templates', icon: '📝', label: 'Templates' },
+        { path: '/settings', icon: '⚙️', label: 'Settings' },
+    ];
+
+    return (
+        <div className="min-h-screen bg-gray-100 flex">
+            <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-white shadow-lg transition-all flex flex-col`}>
+                <div className="p-4 border-b flex items-center justify-between">
+                    {sidebarOpen && <h1 className="text-xl font-bold text-green-600">WhatsApp</h1>}
+                    <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-100 rounded">
+                        {sidebarOpen ? '◀' : '▶'}
+                    </button>
+                </div>
+
+                <nav className="flex-1 p-4">
+                    <ul className="space-y-2">
+                        {navItems.map((item) => (
+                            <li key={item.path}>
+                                <NavLink
+                                    to={item.path}
+                                    className={({ isActive }) =>
+                                        `flex items-center gap-3 px-4 py-3 rounded-xl transition ${
+                                            isActive ? 'bg-green-500 text-white' : 'text-gray-700 hover:bg-gray-100'
+                                        }`
+                                    }
+                                >
+                                    <span className="text-xl">{item.icon}</span>
+                                    {sidebarOpen && <span>{item.label}</span>}
+                                </NavLink>
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+
+                <div className="p-4 border-t">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
+                            {user?.name?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                        {sidebarOpen && <p className="font-medium truncate">{user?.name || 'User'}</p>}
+                    </div>
+                    <button onClick={handleLogout} className="w-full py-2 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center gap-2">
+                        <span>🚪</span>
+                        {sidebarOpen && <span>Logout</span>}
+                    </button>
+                </div>
+            </aside>
+
+            <main className="flex-1 overflow-auto">
+                <Outlet />
+            </main>
+        </div>
+    );
+}
+
+==============================================
+FILE: src/pages/Login.jsx
+==============================================
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
+import toast from 'react-hot-toast';
+
+export default function Login() {
+    const navigate = useNavigate();
+    const { login } = useAuthStore();
+    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await login(formData.email, formData.password);
+            toast.success('Login successful!');
+            navigate('/dashboard');
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Login failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+            <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+                <h1 className="text-3xl font-bold text-green-600 text-center mb-8">Login</h1>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Email</label>
+                        <input
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                            className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Password</label>
+                        <input
+                            type="password"
+                            value={formData.password}
+                            onChange={(e) => setFormData({...formData, password: e.target.value})}
+                            className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500"
+                            required
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 disabled:opacity-50"
+                    >
+                        {loading ? 'Logging in...' : 'Login'}
+                    </button>
+                </form>
+                <p className="text-center mt-6">
+                    Don't have an account? <Link to="/register" className="text-green-600 hover:underline">Register</Link>
+                </p>
+            </div>
+        </div>
+    );
+}
+
+==============================================
+FILE: src/pages/Dashboard.jsx
+==============================================
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
+import api from '../services/api';
+import toast from 'react-hot-toast';
+import { 
+    LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
+} from 'recharts';
+
+export default function Dashboard() {
+    const { tenant, updateTenant } = useAuthStore();
+    const [searchParams] = useSearchParams();
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [connecting, setConnecting] = useState(false);
+    const [recentMessages, setRecentMessages] = useState([]);
+    const [recentContacts, setRecentContacts] = useState([]);
+    const [chartData, setChartData] = useState([]);
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Meta OAuth Config
+    const META_APP_ID = '894345893275312';
+    const REDIRECT_URI = `${window.location.origin}/`;
+    const META_SCOPES = 'whatsapp_business_management,whatsapp_business_messaging';
+
+    // Update time every minute
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Check for OAuth callback
+    useEffect(() => {
+        const code = searchParams.get('code');
+        if (code) {
+            handleMetaCallback(code);
+        }
+    }, [searchParams]);
+
+    const handleMetaCallback = async (code) => {
+        setConnecting(true);
+        try {
+            const response = await api.post('/auth/meta-callback', { code, redirectUri: REDIRECT_URI });
+            if (response.data.success) {
+                updateTenant({ 
+                    whatsappConfig: { 
+                        ...tenant?.whatsappConfig, 
+                        isConnected: true 
+                    } 
+                });
+                toast.success('WhatsApp Business connected successfully!');
+                window.history.replaceState({}, document.title, '/');
+            }
+        } catch (err) {
+            console.error('Meta callback error:', err);
+            toast.error('Failed to connect WhatsApp Business');
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const connectMeta = () => {
+        const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+            `client_id=${META_APP_ID}` +
+            `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+            `&scope=${encodeURIComponent(META_SCOPES)}` +
+            `&response_type=code` +
+            `&state=${tenant?.apiKey}`;
+        
+        window.location.href = authUrl;
+    };
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                // Fetch stats
+                const [statsRes, messagesRes, contactsRes] = await Promise.all([
+                    api.get('/analytics/dashboard').catch(() => ({ data: { data: {} } })),
+                    api.get('/messages?limit=5').catch(() => ({ data: { data: { messages: [] } } })),
+                    api.get('/contacts?limit=5').catch(() => ({ data: { data: { contacts: [] } } }))
+                ]);
+
+                setStats(statsRes.data.data);
+                setRecentMessages(messagesRes.data.data?.messages || []);
+                setRecentContacts(contactsRes.data.data?.contacts || []);
+
+                // Generate chart data for last 7 days
+                const last7Days = [];
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - i);
+                    last7Days.push({
+                        date: date.toLocaleDateString('en-US', { weekday: 'short' }),
+                        sent: Math.floor(Math.random() * 50) + 10,
+                        received: Math.floor(Math.random() * 40) + 5,
+                        delivered: Math.floor(Math.random() * 45) + 8,
+                    });
+                }
+                setChartData(last7Days);
+            } catch (err) {
+                console.error('Dashboard error:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDashboardData();
+    }, []);
+
+    const isWhatsAppConnected = tenant?.whatsappConfig?.isConnected;
+
+    // Calculate percentages for pie chart
+    const messageStats = [
+        { name: 'Delivered', value: stats?.delivered || 65, color: '#10B981' },
+        { name: 'Read', value: stats?.read || 45, color: '#3B82F6' },
+        { name: 'Failed', value: stats?.failed || 5, color: '#EF4444' },
+    ];
+
+    const getGreeting = () => {
+        const hour = currentTime.getHours();
+        if (hour < 12) return 'Good Morning';
+        if (hour < 17) return 'Good Afternoon';
+        return 'Good Evening';
+    };
+
+    return (
+        <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+            {/* Header Section */}
+            <div className="mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+                            {getGreeting()}, {tenant?.name?.split(' ')[0] || 'User'}! ðŸ‘‹
+                        </h1>
+                        <p className="text-gray-600 mt-1">
+                            {currentTime.toLocaleDateString('en-US', { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            })}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Link 
+                            to="/broadcast"
+                            className="flex items-center gap-2 bg-green-500 text-white px-4 py-2.5 rounded-xl hover:bg-green-600 transition-all shadow-lg shadow-green-500/30"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                            New Broadcast
+                        </Link>
+                        <Link 
+                            to="/conversations"
+                            className="flex items-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-all shadow border"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            Messages
+                        </Link>
+                    </div>
+                </div>
+            </div>
+
+            {/* WhatsApp Connection Alert */}
+            {!isWhatsAppConnected && (
+                <div className="mb-6 bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-xl">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur">
+                                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-xl">Connect WhatsApp Business</h3>
+                                <p className="text-orange-100">Link your Meta account to start sending messages</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={connectMeta}
+                            disabled={connecting}
+                            className="flex items-center gap-2 bg-white text-orange-600 px-6 py-3 rounded-xl font-semibold hover:bg-orange-50 disabled:opacity-50 transition-all shadow-lg"
+                        >
+                            {connecting ? (
+                                <>
+                                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                    </svg>
+                                    Connecting...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                    </svg>
+                                    Connect with Meta
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Stats Overview Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+                <StatsCard
+                    title="Message Credits"
+                    value={tenant?.messageCredits || 0}
+                    icon="ðŸ’³"
+                    trend={null}
+                    color="from-green-500 to-emerald-600"
+                    subtitle="Available balance"
+                />
+                <StatsCard
+                    title="Messages Sent"
+                    value={loading ? '...' : stats?.totalMessages || tenant?.totalMessagesSent || 0}
+                    icon="ðŸ“¤"
+                    trend="+12%"
+                    trendUp={true}
+                    color="from-blue-500 to-indigo-600"
+                    subtitle="All time"
+                />
+                <StatsCard
+                    title="Total Contacts"
+                    value={loading ? '...' : stats?.totalContacts || 0}
+                    icon="ðŸ‘¥"
+                    trend="+5"
+                    trendUp={true}
+                    color="from-purple-500 to-violet-600"
+                    subtitle="In your list"
+                />
+                <StatsCard
+                    title="Delivery Rate"
+                    value={loading ? '...' : `${stats?.deliveryRate || 98}%`}
+                    icon="âœ…"
+                    trend="+2%"
+                    trendUp={true}
+                    color="from-amber-500 to-orange-600"
+                    subtitle="Last 7 days"
+                />
+            </div>
+
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                {/* Message Analytics Chart */}
+                <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Message Analytics</h3>
+                            <p className="text-sm text-gray-500">Last 7 days performance</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                                <span className="w-3 h-3 bg-green-500 rounded-full"></span> Sent
+                            </span>
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                                <span className="w-3 h-3 bg-blue-500 rounded-full"></span> Received
+                            </span>
+                        </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={280}>
+                        <AreaChart data={chartData}>
+                            <defs>
+                                <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+                            <Tooltip 
+                                contentStyle={{ 
+                                    backgroundColor: '#1F2937', 
+                                    border: 'none', 
+                                    borderRadius: '12px',
+                                    color: 'white'
+                                }} 
+                            />
+                            <Area type="monotone" dataKey="sent" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorSent)" />
+                            <Area type="monotone" dataKey="received" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorReceived)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Message Status Pie Chart */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="mb-6">
+                        <h3 className="text-lg font-bold text-gray-900">Message Status</h3>
+                        <p className="text-sm text-gray-500">Distribution overview</p>
+                    </div>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                            <Pie
+                                data={messageStats}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={50}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                            >
+                                {messageStats.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip />
+                        </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex justify-center gap-4 mt-4">
+                        {messageStats.map((stat, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: stat.color }}></span>
+                                <span className="text-xs text-gray-600">{stat.name}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Actions & Recent Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                {/* Quick Actions */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
+                    <div className="space-y-3">
+                        <QuickAction
+                            to="/conversations"
+                            icon="ðŸ’¬"
+                            title="New Message"
+                            description="Start a conversation"
+                            color="bg-green-100 text-green-600"
+                        />
+                        <QuickAction
+                            to="/contacts"
+                            icon="ðŸ‘¥"
+                            title="Add Contact"
+                            description="Grow your audience"
+                            color="bg-blue-100 text-blue-600"
+                        />
+                        <QuickAction
+                            to="/broadcast"
+                            icon="ðŸ“¢"
+                            title="Broadcast"
+                            description="Send bulk messages"
+                            color="bg-purple-100 text-purple-600"
+                        />
+                        <QuickAction
+                            to="/templates"
+                            icon="ðŸ“"
+                            title="Templates"
+                            description="Manage message templates"
+                            color="bg-amber-100 text-amber-600"
+                        />
+                    </div>
+                </div>
+
+                {/* Recent Conversations */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-gray-900">Recent Messages</h3>
+                        <Link to="/conversations" className="text-sm text-green-600 hover:underline">
+                            View all â†’
+                        </Link>
+                    </div>
+                    <div className="space-y-3">
+                        {recentMessages.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                <span className="text-4xl mb-2 block">ðŸ’¬</span>
+                                <p>No messages yet</p>
+                            </div>
+                        ) : (
+                            recentMessages.slice(0, 4).map((msg, i) => (
+                                <div key={i} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition cursor-pointer">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                        {(msg.to || msg.from)?.[0]?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate">{msg.to || msg.from}</p>
+                                        <p className="text-xs text-gray-500 truncate">
+                                            {msg.content?.text || 'Media message'}
+                                        </p>
+                                    </div>
+                                    <span className={`w-2 h-2 rounded-full ${
+                                        msg.status === 'delivered' ? 'bg-green-500' :
+                                        msg.status === 'sent' ? 'bg-blue-500' :
+                                        msg.status === 'failed' ? 'bg-red-500' :
+                                        'bg-gray-300'
+                                    }`}></span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Recent Contacts */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-gray-900">Recent Contacts</h3>
+                        <Link to="/contacts" className="text-sm text-green-600 hover:underline">
+                            View all â†’
+                        </Link>
+                    </div>
+                    <div className="space-y-3">
+                        {recentContacts.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                <span className="text-4xl mb-2 block">ðŸ‘¥</span>
+                                <p>No contacts yet</p>
+                            </div>
+                        ) : (
+                            recentContacts.slice(0, 4).map((contact, i) => (
+                                <div key={i} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition cursor-pointer">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                        {(contact.name || contact.phone)?.[0]?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate">{contact.name || 'Unknown'}</p>
+                                        <p className="text-xs text-gray-500 truncate">{contact.phone}</p>
+                                    </div>
+                                    {contact.tags?.[0] && (
+                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                                            {contact.tags[0]}
+                                        </span>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Section - Credits & API */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Credits Usage */}
+                <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 text-white">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <p className="text-green-100 text-sm font-medium">Available Credits</p>
+                            <h2 className="text-4xl font-bold mt-1">{tenant?.messageCredits || 0}</h2>
+                        </div>
+                        <div className="bg-white/20 p-3 rounded-xl backdrop-blur">
+                            <span className="text-3xl">ðŸ’³</span>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white/10 rounded-xl p-4 backdrop-blur mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-green-100">Usage this month</span>
+                            <span className="font-semibold">{tenant?.totalMessagesSent || 0} sent</span>
+                        </div>
+                        <div className="w-full bg-white/20 rounded-full h-2">
+                            <div 
+                                className="bg-white h-2 rounded-full transition-all"
+                                style={{ width: `${Math.min((tenant?.totalMessagesSent || 0) / 1000 * 100, 100)}%` }}
+                            ></div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Link 
+                            to="/billing"
+                            className="flex-1 bg-white text-green-600 py-3 rounded-xl font-semibold text-center hover:bg-green-50 transition"
+                        >
+                            Buy Credits
+                        </Link>
+                        <Link 
+                            to="/billing"
+                            className="flex-1 bg-white/20 text-white py-3 rounded-xl font-semibold text-center hover:bg-white/30 transition backdrop-blur"
+                        >
+                            Upgrade Plan
+                        </Link>
+                    </div>
+                </div>
+
+                {/* API Key & Developer */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">API Access</h3>
+                            <p className="text-sm text-gray-500">Integrate WhatsApp in your apps</p>
+                        </div>
+                        <Link to="/api-docs" className="text-green-600 text-sm hover:underline">
+                            Documentation â†’
+                        </Link>
+                    </div>
+
+                    <div className="bg-gray-900 rounded-xl p-4 mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-gray-400 text-xs uppercase tracking-wide">API Key</span>
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(tenant?.apiKey);
+                                    toast.success('API Key copied!');
+                                }}
+                                className="text-green-400 text-xs hover:text-green-300 transition"
+                            >
+                                Copy
+                            </button>
+                        </div>
+                        <code className="text-green-400 font-mono text-sm break-all">
+                            {tenant?.apiKey || 'No API key generated'}
+                        </code>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-xl p-3 text-center">
+                            <p className="text-2xl font-bold text-gray-900">REST</p>
+                            <p className="text-xs text-gray-500">API Type</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-3 text-center">
+                            <p className="text-2xl font-bold text-green-600">Active</p>
+                            <p className="text-xs text-gray-500">Status</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tips Section */}
+            <div className="mt-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-white">
+                <div className="flex flex-col md:flex-row items-center gap-4">
+                    <div className="text-4xl">ðŸ’¡</div>
+                    <div className="flex-1 text-center md:text-left">
+                        <h3 className="font-bold text-lg">Pro Tip</h3>
+                        <p className="text-blue-100">
+                            Use message templates for better delivery rates. Templates approved by WhatsApp 
+                            have higher chances of reaching your audience.
+                        </p>
+                    </div>
+                    <Link 
+                        to="/templates"
+                        className="bg-white text-blue-600 px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-50 transition whitespace-nowrap"
+                    >
+                        Create Template
+                    </Link>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Stats Card Component
+function StatsCard({ title, value, icon, trend, trendUp, color, subtitle }) {
+    return (
+        <div className="bg-white rounded-2xl shadow-sm p-5 hover:shadow-md transition-all">
+            <div className="flex justify-between items-start mb-3">
+                <div className={`w-12 h-12 bg-gradient-to-br ${color} rounded-xl flex items-center justify-center text-2xl shadow-lg`}>
+                    {icon}
+                </div>
+                {trend && (
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        trendUp ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                    }`}>
+                        {trendUp ? 'â†‘' : 'â†“'} {trend}
+                    </span>
+                )}
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
+            <p className="text-sm text-gray-500 mt-1">{title}</p>
+            {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+        </div>
+    );
+}
+
+// Quick Action Component
+function QuickAction({ to, icon, title, description, color }) {
+    return (
+        <Link 
+            to={to}
+            className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition group"
+        >
+            <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition`}>
+                {icon}
+            </div>
+            <div>
+                <p className="font-medium text-gray-900">{title}</p>
+                <p className="text-xs text-gray-500">{description}</p>
+            </div>
+            <svg className="w-5 h-5 text-gray-300 ml-auto group-hover:text-gray-500 group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+        </Link>
+    );
+}
+
+==============================================
+FOLDER: src/pages - All Files
+==============================================
+
+FullName                                                                                   Length LastWriteTime        
+--------                                                                                   ------ -------------        
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\ApiDocs.jsx         9718 1/18/2026 4:52:52 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Billing.jsx        36694 1/18/2026 5:44:41 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Broadcast.jsx      62792 1/18/2026 6:53:58 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Contacts.jsx       52794 1/18/2026 5:32:27 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Conversations.jsx  21297 1/18/2026 5:13:49 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Dashboard.jsx      31460 1/18/2026 8:47:28 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Login.jsx           2927 1/18/2026 10:46:56 PM
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Register.jsx        3751 1/18/2026 10:47:21 PM
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Settings.jsx       32058 1/18/2026 9:03:40 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\Templates.jsx       9723 1/18/2026 5:01:31 PM 
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\auth\Login.jsx      1886 1/18/2026 10:37:55 PM
+C:\Users\Sameer Thakur\OneDrive\Desktop\Whatsapp-saas\frontend\src\pages\auth\Register.jsx   8032 1/18/2026 4:40:09 PM 
+
+
+
+
