@@ -1,3 +1,5 @@
+// src/pages/auth/Login.jsx
+
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
@@ -12,15 +14,30 @@ export default function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        console.log('🔐 Login form submitted');
         setLoading(true);
 
-        const result = await login(email, password);
-
-        if (result.success) {
-            toast.success('Welcome back!');
-            navigate('/dashboard');
-        } else {
-            toast.error(result.message);
+        try {
+            // Call login and await result
+            const result = await login(email, password);
+            console.log('Login result:', result);
+            
+            if (result && result.success) {
+                console.log('✅ Login successful - navigating');
+                toast.success('Welcome back!');
+                
+                // Small delay to ensure state updates
+                setTimeout(() => {
+                    navigate('/dashboard', { replace: true });
+                }, 100);
+            } else {
+                console.log('❌ Login failed:', result?.message);
+                toast.error(result?.message || 'Login failed');
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error('❌ Login error:', error);
+            toast.error('Something went wrong. Please try again.');
             setLoading(false);
         }
     };
@@ -39,6 +56,7 @@ export default function Login() {
                         className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
                         required
                         disabled={loading}
+                        placeholder="Enter your email"
                     />
                 </div>
 
@@ -51,6 +69,7 @@ export default function Login() {
                         className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
                         required
                         disabled={loading}
+                        placeholder="Enter your password"
                     />
                 </div>
 

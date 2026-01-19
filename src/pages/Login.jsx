@@ -1,3 +1,5 @@
+// src/pages/Login.jsx
+
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -5,20 +7,34 @@ import toast from 'react-hot-toast';
 
 export default function Login() {
     const navigate = useNavigate();
-    const { login } = useAuthStore();
+    const login = useAuthStore((state) => state.login);
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        console.log('🔐 Login form submitted');
         setLoading(true);
+        
         try {
-            await login(formData.email, formData.password);
-            toast.success('Login successful!');
-            navigate('/dashboard');
+            const result = await login(formData.email, formData.password);
+            console.log('Login result:', result);
+            
+            if (result && result.success) {
+                console.log('✅ Login successful - navigating');
+                toast.success('Login successful!');
+                
+                setTimeout(() => {
+                    navigate('/dashboard', { replace: true });
+                }, 100);
+            } else {
+                console.log('❌ Login failed:', result?.message);
+                toast.error(result?.message || 'Login failed');
+                setLoading(false);
+            }
         } catch (err) {
-            toast.error(err.response?.data?.error || 'Login failed');
-        } finally {
+            console.error('❌ Login error:', err);
+            toast.error(err.message || 'Login failed');
             setLoading(false);
         }
     };
@@ -36,6 +52,7 @@ export default function Login() {
                             onChange={(e) => setFormData({...formData, email: e.target.value})}
                             className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500"
                             required
+                            placeholder="Enter your email"
                         />
                     </div>
                     <div>
@@ -46,6 +63,7 @@ export default function Login() {
                             onChange={(e) => setFormData({...formData, password: e.target.value})}
                             className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500"
                             required
+                            placeholder="Enter your password"
                         />
                     </div>
                     <button
