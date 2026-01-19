@@ -1,4 +1,6 @@
-import { create } from 'zustand';
+// src/store/authStore.js
+
+import { create } from 'zustand';  // ✅ Fixed import
 import api from '../services/api';
 
 export const useAuthStore = create((set, get) => ({
@@ -12,22 +14,29 @@ export const useAuthStore = create((set, get) => ({
             console.log('🔐 Attempting login:', email);
             
             const res = await api.post('/auth/login', { email, password });
+            
+            console.log('Login response:', res.data);
+            
+            if (!res.data.success || !res.data.data) {
+                throw new Error('Invalid response structure');
+            }
+            
             const { token, user, tenant } = res.data.data;
             
-            console.log('✅ Login successful');
-            console.log('🔥 Is Super Admin:', user?.isSuperAdmin);
+            if (!token) {
+                throw new Error('No token received');
+            }
             
-            // Save token
+            console.log('✅ Login successful');
+            
+            // Save token with CORRECT name
             localStorage.setItem('AUTH_TOKEN', token);
-            console.log('💾 Token saved');
+            console.log('💾 Token saved as AUTH_TOKEN');
             
             // Update state
             set({
-                user: {
-                    ...user,
-                    isSuperAdmin: user.isSuperAdmin || false
-                },
-                tenant,
+                user: user,
+                tenant: tenant,
                 isAuthenticated: true,
                 isLoading: false
             });
@@ -38,7 +47,7 @@ export const useAuthStore = create((set, get) => ({
             set({ isLoading: false });
             return { 
                 success: false, 
-                message: error.response?.data?.message || 'Login failed' 
+                message: error.response?.data?.message || error.message || 'Login failed' 
             };
         }
     },
@@ -46,6 +55,7 @@ export const useAuthStore = create((set, get) => ({
     logout: () => {
         console.log('🚪 Logging out...');
         localStorage.removeItem('AUTH_TOKEN');
+        localStorage.removeItem('token');  // Remove both just in case
         set({
             user: null,
             tenant: null,
@@ -60,7 +70,6 @@ export const useAuthStore = create((set, get) => ({
         console.log('🔍 LoadUser called');
         console.log('🔑 Token exists:', !!token);
         
-        // No token - not authenticated
         if (!token) {
             console.log('⚠️ No token found');
             set({ 
@@ -78,22 +87,15 @@ export const useAuthStore = create((set, get) => ({
             
             console.log('✅ /auth/me response:', res.data);
             
-            // Check if response is valid
-            if (!res.data.success || !res.data.data) {
-                throw new Error('Invalid response');
+            if (!res.data.success) {
+                throw new Error('Failed to load user');
             }
             
             const { user, tenant } = res.data.data;
             
-            console.log('✅ User loaded:', user?.email);
-            console.log('🔥 Is Super Admin:', user?.isSuperAdmin);
-            
             set({
-                user: {
-                    ...user,
-                    isSuperAdmin: user.isSuperAdmin || false
-                },
-                tenant,
+                user: user,
+                tenant: tenant,
                 isAuthenticated: true,
                 isLoading: false
             });
@@ -102,14 +104,9 @@ export const useAuthStore = create((set, get) => ({
             
         } catch (error) {
             console.error('❌ LoadUser failed:', error);
-            console.error('❌ Error status:', error.response?.status);
-            console.error('❌ Error data:', error.response?.data);
             
-            // Token invalid - remove it
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                console.log('🗑️ Removing invalid token');
-                localStorage.removeItem('AUTH_TOKEN');
-            }
+            // Clear invalid token
+            localStorage.removeItem('AUTH_TOKEN');
             
             set({
                 user: null,
@@ -120,17 +117,5 @@ export const useAuthStore = create((set, get) => ({
             
             return false;
         }
-    },
-
-    updateUser: (userData) => {
-        set((state) => ({
-            user: { ...state.user, ...userData }
-        }));
-    },
-
-    updateTenant: (tenantData) => {
-        set((state) => ({
-            tenant: { ...state.tenant, ...tenantData }
-        }));
     }
 }));
