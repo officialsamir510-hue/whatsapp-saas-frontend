@@ -5,7 +5,7 @@ export const useAuthStore = create((set, get) => ({
     user: null,
     tenant: null,
     isAuthenticated: false,
-    isLoading: true,  // ← Add loading state
+    isLoading: true,
     
     login: async (email, password) => {
         try {
@@ -59,7 +59,6 @@ export const useAuthStore = create((set, get) => ({
         
         console.log('🔍 LoadUser called');
         console.log('🔑 Token exists:', !!token);
-        console.log('🔑 Token value:', token ? token.substring(0, 20) + '...' : 'null');
         
         // No token - not authenticated
         if (!token) {
@@ -70,7 +69,7 @@ export const useAuthStore = create((set, get) => ({
                 tenant: null,
                 isLoading: false
             });
-            return;
+            return false;
         }
         
         try {
@@ -99,28 +98,27 @@ export const useAuthStore = create((set, get) => ({
                 isLoading: false
             });
             
+            return true;
+            
         } catch (error) {
             console.error('❌ LoadUser failed:', error);
             console.error('❌ Error status:', error.response?.status);
             console.error('❌ Error data:', error.response?.data);
             
-            // Only remove token if it's actually invalid (401/403)
+            // Token invalid - remove it
             if (error.response?.status === 401 || error.response?.status === 403) {
                 console.log('🗑️ Removing invalid token');
                 localStorage.removeItem('AUTH_TOKEN');
-                set({
-                    user: null,
-                    tenant: null,
-                    isAuthenticated: false,
-                    isLoading: false
-                });
-            } else {
-                // Network error or server error - keep token, retry later
-                console.log('⚠️ Temporary error - keeping token');
-                set({
-                    isLoading: false
-                });
             }
+            
+            set({
+                user: null,
+                tenant: null,
+                isAuthenticated: false,
+                isLoading: false
+            });
+            
+            return false;
         }
     },
 
