@@ -10,7 +10,7 @@ const api = axios.create({
         'Content-Type': 'application/json'
     },
     withCredentials: true,
-    timeout: 30000 // 30 seconds
+    timeout: 30000
 });
 
 // Request interceptor
@@ -36,7 +36,7 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
     (response) => {
-        console.log(`✅ Response: ${response.config.url} - ${response.status}`);
+        console.log(`✅ ${response.config.url} - ${response.status}`);
         return response;
     },
     (error) => {
@@ -48,21 +48,13 @@ api.interceptors.response.use(
             message: error.response?.data?.message || error.message
         });
 
-        // Don't redirect for auth endpoints
-        const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') ||
-                               originalRequest?.url?.includes('/auth/register');
-
-        if (error.response?.status === 401 && !isAuthEndpoint) {
-            console.log('🚪 401 Unauthorized - Logging out...');
-
-            localStorage.removeItem('AUTH_TOKEN');
-
-            // Prevent redirect loop
-            if (!window.location.pathname.includes('/login')) {
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 100);
-            }
+        // ✅ CRITICAL FIX: Don't auto-redirect here
+        // Let individual functions handle errors
+        
+        // Only log, don't redirect
+        if (error.response?.status === 401) {
+            console.log('⚠️ 401 Unauthorized detected');
+            // Don't remove token here - let loadUser handle it
         }
 
         return Promise.reject(error);

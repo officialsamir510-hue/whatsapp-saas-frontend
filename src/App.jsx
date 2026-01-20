@@ -24,23 +24,32 @@ import Users from './pages/Users';
 import SuperAdmin from './pages/SuperAdmin';
 
 function App() {
-    const { isAuthenticated, user, isLoading, loadUser } = useAuthStore();
+    const { isAuthenticated, user, loadUser } = useAuthStore();
     const [initialized, setInitialized] = useState(false);
 
     useEffect(() => {
-        console.log('🚀 App mounting - loading user...');
-        
-        const init = async () => {
-            await loadUser();
+        const initializeAuth = async () => {
+            console.log('🚀 App initializing...');
+            
+            const token = localStorage.getItem('AUTH_TOKEN');
+            console.log('🔑 Token exists:', !!token);
+            
+            if (token) {
+                console.log('📡 Loading user...');
+                await loadUser();
+            } else {
+                console.log('⚠️ No token, skipping loadUser');
+            }
+            
             setInitialized(true);
             console.log('✅ App initialized');
         };
         
-        init();
-    }, []);  // Only run once on mount
+        initializeAuth();
+    }, []); // Empty dependency array - run once
 
     // Show loading while initializing
-    if (!initialized || isLoading) {
+    if (!initialized) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-100">
                 <div className="text-center">
@@ -51,11 +60,34 @@ function App() {
         );
     }
 
-    console.log('🎯 Rendering App - isAuthenticated:', isAuthenticated, 'isSuperAdmin:', user?.isSuperAdmin);
+    console.log('🎯 App render - isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
     return (
         <BrowserRouter>
-            <Toaster position="top-right" />
+            <Toaster 
+                position="top-right"
+                toastOptions={{
+                    duration: 3000,
+                    style: {
+                        background: '#363636',
+                        color: '#fff',
+                    },
+                    success: {
+                        duration: 3000,
+                        iconTheme: {
+                            primary: '#10b981',
+                            secondary: '#fff',
+                        },
+                    },
+                    error: {
+                        duration: 4000,
+                        iconTheme: {
+                            primary: '#ef4444',
+                            secondary: '#fff',
+                        },
+                    },
+                }}
+            />
             
             <Routes>
                 {/* Public Routes */}

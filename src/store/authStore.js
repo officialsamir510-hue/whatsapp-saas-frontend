@@ -27,10 +27,8 @@ export const useAuthStore = create((set, get) => ({
             if (response.data?.success && response.data?.data?.token) {
                 const { token, user, tenant } = response.data.data;
 
-                // Save token
                 localStorage.setItem('AUTH_TOKEN', token);
 
-                // Update state
                 set({
                     user,
                     tenant,
@@ -83,10 +81,8 @@ export const useAuthStore = create((set, get) => ({
             if (response.data?.success && response.data?.data?.token) {
                 const { token, user, tenant } = response.data.data;
 
-                // Save token
                 localStorage.setItem('AUTH_TOKEN', token);
 
-                // Update state
                 set({
                     user,
                     tenant,
@@ -95,7 +91,7 @@ export const useAuthStore = create((set, get) => ({
                     error: null
                 });
 
-                console.log('✅ Login successful');
+                console.log('✅ Login successful - isAuthenticated set to true');
 
                 return {
                     success: true,
@@ -126,8 +122,11 @@ export const useAuthStore = create((set, get) => ({
     loadUser: async () => {
         const token = localStorage.getItem('AUTH_TOKEN');
 
+        console.log('🔍 loadUser called');
+        console.log('🔑 Token exists:', !!token);
+
         if (!token) {
-            console.log('⚠️ No token found');
+            console.log('⚠️ No token - setting isAuthenticated to false');
             set({
                 user: null,
                 tenant: null,
@@ -140,11 +139,11 @@ export const useAuthStore = create((set, get) => ({
         try {
             set({ isLoading: true });
 
-            console.log('📡 Loading user from /auth/me...');
+            console.log('📡 Calling /auth/me...');
 
             const response = await api.get('/auth/me');
 
-            console.log('✅ User loaded:', response.data);
+            console.log('✅ /auth/me response:', response.data);
 
             if (response.data?.success && response.data?.data?.user) {
                 const { user, tenant } = response.data.data;
@@ -157,24 +156,42 @@ export const useAuthStore = create((set, get) => ({
                     error: null
                 });
 
+                console.log('✅ User loaded - isAuthenticated set to true');
+
                 return true;
             }
 
+            console.log('⚠️ Invalid response from /auth/me');
             throw new Error('Invalid response');
 
         } catch (error) {
             console.error('❌ LoadUser error:', error);
+            console.error('❌ Error response:', error.response?.data);
+            console.error('❌ Error status:', error.response?.status);
 
-            // Clear invalid auth
-            localStorage.removeItem('AUTH_TOKEN');
-
-            set({
-                user: null,
-                tenant: null,
-                isAuthenticated: false,
-                isLoading: false,
-                error: null
-            });
+            // ✅ CRITICAL: Don't clear token immediately
+            // Let user stay logged in if token is still valid locally
+            
+            // Only clear if it's a real auth error (401)
+            if (error.response?.status === 401) {
+                console.log('🚪 401 error - clearing token');
+                localStorage.removeItem('AUTH_TOKEN');
+                
+                set({
+                    user: null,
+                    tenant: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    error: null
+                });
+            } else {
+                // Network error or server error - keep user logged in
+                console.log('⚠️ Non-auth error - keeping user logged in');
+                set({
+                    isLoading: false
+                    // Don't change isAuthenticated
+                });
+            }
 
             return false;
         }
@@ -185,13 +202,10 @@ export const useAuthStore = create((set, get) => ({
         try {
             console.log('🚪 Logging out...');
 
-            // Call logout endpoint (optional)
             await api.post('/auth/logout').catch(() => {});
 
-            // Clear token
             localStorage.removeItem('AUTH_TOKEN');
 
-            // Clear state
             set({
                 user: null,
                 tenant: null,
@@ -205,7 +219,6 @@ export const useAuthStore = create((set, get) => ({
         } catch (error) {
             console.error('❌ Logout error:', error);
 
-            // Clear anyway
             localStorage.removeItem('AUTH_TOKEN');
 
             set({
@@ -218,7 +231,6 @@ export const useAuthStore = create((set, get) => ({
         }
     },
 
-    // ==================== CLEAR ERROR ====================
     clearError: () => {
         set({ error: null });
     }
