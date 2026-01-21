@@ -27,6 +27,7 @@ export default function ApiKeys() {
             setNewApiKey(response.data.data.key);
             queryClient.invalidateQueries(['api-keys']);
             toast.success('API key created successfully!');
+            setShowCreateModal(false);
         },
         onError: (error) => {
             if (error.response?.data?.upgrade) {
@@ -42,7 +43,7 @@ export default function ApiKeys() {
         mutationFn: (keyId) => api.delete(`/keys/${keyId}`),
         onSuccess: () => {
             queryClient.invalidateQueries(['api-keys']);
-            toast.success('API key deleted');
+            toast.success('API key deleted successfully');
         },
         onError: (error) => {
             toast.error(error.response?.data?.message || 'Failed to delete API key');
@@ -120,7 +121,7 @@ export default function ApiKeys() {
                             </code>
                             <button
                                 onClick={() => copyToClipboard(newApiKey)}
-                                className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
+                                className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition flex-shrink-0"
                             >
                                 <FaCopy /> Copy
                             </button>
@@ -158,12 +159,14 @@ export default function ApiKeys() {
                     </div>
                     <h3 className="text-xl font-semibold text-gray-700 mb-2">No API Keys Yet</h3>
                     <p className="text-gray-500 mb-6">Create your first API key to start integrating</p>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="bg-green-500 text-white px-6 py-2.5 rounded-lg hover:bg-green-600 transition"
-                    >
-                        Create First API Key
-                    </button>
+                    {canCreateMore && (
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="bg-green-500 text-white px-6 py-2.5 rounded-lg hover:bg-green-600 transition"
+                        >
+                            Create First API Key
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="grid gap-4">
@@ -235,7 +238,7 @@ function ApiKeyCard({ apiKey, onDelete }) {
                     </div>
                     <div className="flex-1">
                         <h3 className="font-bold text-lg text-gray-900">{apiKey.name}</h3>
-                        <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-500">
                             <span className="flex items-center gap-1">
                                 <span className="text-gray-400">Created:</span>
                                 {formatDate(apiKey.createdAt)}
@@ -315,7 +318,8 @@ function CreateApiKeyModal({ onClose, onCreate, isLoading }) {
         { value: 'send_messages', label: 'Send Messages', description: 'Send WhatsApp messages via API' },
         { value: 'manage_templates', label: 'Manage Templates', description: 'Create and manage message templates' },
         { value: 'manage_contacts', label: 'Manage Contacts', description: 'Add and manage contacts' },
-        { value: 'view_analytics', label: 'View Analytics', description: 'Access analytics and reports' }
+        { value: 'view_analytics', label: 'View Analytics', description: 'Access analytics and reports' },
+        { value: 'manage_campaigns', label: 'Manage Campaigns', description: 'Create and manage campaigns' }
     ];
 
     const handleSubmit = (e) => {
@@ -338,7 +342,7 @@ function CreateApiKeyModal({ onClose, onCreate, isLoading }) {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
+                <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
                     <div className="flex justify-between items-center">
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900">Create API Key</h2>

@@ -22,7 +22,7 @@ import Billing from './pages/Billing';
 import Users from './pages/Users';
 import SuperAdmin from './pages/SuperAdmin';
 
-// ==================== NEW IMPORTS ====================
+// New Pages
 import ApiKeys from './pages/ApiKeys';
 import ApiDocumentation from './pages/ApiDocumentation';
 import WhatsAppConnect from './pages/WhatsAppConnect';
@@ -50,7 +50,7 @@ function App() {
         };
         
         initializeAuth();
-    }, []);
+    }, []); // Empty array - run only once on mount
 
     // Show loading while initializing
     if (!initialized) {
@@ -94,7 +94,7 @@ function App() {
             />
             
             <Routes>
-                {/* ==================== PUBLIC ROUTES ==================== */}
+                {/* Public Routes */}
                 <Route element={<AuthLayout />}>
                     <Route 
                         path="/login" 
@@ -106,11 +106,11 @@ function App() {
                     />
                 </Route>
 
-                {/* ==================== PROTECTED ROUTES ==================== */}
+                {/* Protected Routes */}
                 <Route 
                     element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" replace />}
                 >
-                    {/* Main Dashboard */}
+                    {/* Main */}
                     <Route path="/dashboard" element={<Dashboard />} />
                     
                     {/* Messaging */}
@@ -119,24 +119,24 @@ function App() {
                     <Route path="/templates" element={<Templates />} />
                     <Route path="/broadcast" element={<Broadcast />} />
                     
-                    {/* ✅ NEW: WhatsApp & API Routes */}
+                    {/* WhatsApp & API */}
                     <Route path="/whatsapp-connect" element={<WhatsAppConnect />} />
                     <Route path="/api-keys" element={<ApiKeys />} />
                     <Route path="/api-docs" element={<ApiDocumentation />} />
                     
-                    {/* Account & Settings */}
+                    {/* Account */}
                     <Route path="/users" element={<Users />} />
                     <Route path="/billing" element={<Billing />} />
                     <Route path="/settings" element={<Settings />} />
                     
-                    {/* Super Admin Only */}
+                    {/* Super Admin */}
                     <Route 
                         path="/super-admin" 
                         element={user?.isSuperAdmin ? <SuperAdmin /> : <Navigate to="/dashboard" replace />}
                     />
                 </Route>
 
-                {/* ==================== CATCH ALL ==================== */}
+                {/* Catch All */}
                 <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
                 <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
             </Routes>

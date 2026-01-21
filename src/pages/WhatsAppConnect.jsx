@@ -23,7 +23,7 @@ export default function WhatsAppConnect() {
             queryClient.invalidateQueries(['whatsapp-accounts']);
             navigate('/whatsapp-connect', { replace: true });
         } else if (connected === 'error') {
-            toast.error(message || 'Failed to connect WhatsApp Business');
+            toast.error(decodeURIComponent(message) || 'Failed to connect WhatsApp Business');
             navigate('/whatsapp-connect', { replace: true });
         }
     }, [searchParams, navigate, queryClient]);
@@ -42,19 +42,25 @@ export default function WhatsAppConnect() {
         try {
             setConnecting(true);
 
-            // Get OAuth URL
+            console.log('🔗 Initiating WhatsApp OAuth...');
+            
+            // Get OAuth URL from backend
             const { data } = await api.get('/whatsapp/oauth/init');
+            
+            console.log('✅ OAuth URL received:', data.data.oauthUrl);
             
             // Redirect to Meta OAuth
             window.location.href = data.data.oauthUrl;
 
         } catch (error) {
-            console.error('Connect error:', error);
+            console.error('❌ Connect error:', error);
             
-            if (error.response?.data?.upgrade) {
+            if (error.response?.status === 401) {
+                toast.error('Please login first');
+            } else if (error.response?.data?.upgrade) {
                 toast.error('Please upgrade your plan to connect more accounts');
             } else {
-                toast.error(error.response?.data?.message || 'Failed to connect');
+                toast.error(error.response?.data?.message || 'Failed to initiate connection');
             }
             
             setConnecting(false);
@@ -69,7 +75,7 @@ export default function WhatsAppConnect() {
             toast.success('Account disconnected successfully');
         },
         onError: (error) => {
-            toast.error(error.response?.data?.message || 'Failed to disconnect');
+            toast.error(error.response?.data?.message || 'Failed to disconnect account');
         }
     });
 
@@ -81,7 +87,7 @@ export default function WhatsAppConnect() {
             toast.success('Account synced successfully');
         },
         onError: (error) => {
-            toast.error(error.response?.data?.message || 'Failed to sync');
+            toast.error(error.response?.data?.message || 'Failed to sync account');
         }
     });
 
@@ -196,9 +202,9 @@ export default function WhatsAppConnect() {
                         <button
                             onClick={handleConnect}
                             disabled={connecting}
-                            className="bg-green-500 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-600 transition shadow-lg"
+                            className="bg-green-500 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-600 transition shadow-lg disabled:opacity-50"
                         >
-                            Get Started
+                            {connecting ? 'Connecting...' : 'Get Started'}
                         </button>
                     )}
                 </div>
@@ -333,7 +339,7 @@ export default function WhatsAppConnect() {
     );
 }
 
-// ==================== WHATSAPP ACCOUNT CARD ====================
+// WhatsApp Account Card Component
 function WhatsAppAccountCard({ account, onDisconnect, onSync, isSyncing }) {
     const [showPhones, setShowPhones] = useState(false);
     const queryClient = useQueryClient();
