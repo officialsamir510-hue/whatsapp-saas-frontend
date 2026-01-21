@@ -19,56 +19,62 @@ export default function Dashboard() {
     const [chartData, setChartData] = useState([]);
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    // Meta OAuth Config
-    const META_APP_ID = '894345893275312';
-    const REDIRECT_URI = `${window.location.origin}/`;
-    const META_SCOPES = 'whatsapp_business_management,whatsapp_business_messaging';
-
     // Update time every minute
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
 
-    // Check for OAuth callback
+    // ==================== NEW: Check for OAuth callback ====================
     useEffect(() => {
-        const code = searchParams.get('code');
-        if (code) {
-            handleMetaCallback(code);
+        const connected = searchParams.get('connected');
+        const message = searchParams.get('message');
+        
+        if (connected === 'success') {
+            toast.success('WhatsApp Business connected successfully! 🎉');
+            // Remove query params
+            window.history.replaceState({}, '', '/dashboard');
+            // Update tenant state
+            updateTenant({ 
+                whatsappConfig: { 
+                    ...tenant?.whatsappConfig, 
+                    isConnected: true 
+                } 
+            });
+            // Refresh page to update tenant data
+            setTimeout(() => window.location.reload(), 1500);
+        } else if (connected === 'error') {
+            toast.error(message || 'Failed to connect WhatsApp');
+            window.history.replaceState({}, '', '/dashboard');
         }
     }, [searchParams]);
 
-    const handleMetaCallback = async (code) => {
-        setConnecting(true);
+    // ==================== NEW: Connect Meta Function ====================
+    const connectMeta = async () => {
         try {
-            const response = await api.post('/auth/meta-callback', { code, redirectUri: REDIRECT_URI });
+            setConnecting(true);
+            
+            // Get OAuth URL from backend
+            const response = await api.get('/whatsapp/oauth/init');
+            
             if (response.data.success) {
-                updateTenant({ 
-                    whatsappConfig: { 
-                        ...tenant?.whatsappConfig, 
-                        isConnected: true 
-                    } 
-                });
-                toast.success('WhatsApp Business connected successfully!');
-                window.history.replaceState({}, document.title, '/');
+                // Redirect to Meta OAuth
+                window.location.href = response.data.data.oauthUrl;
+            } else {
+                throw new Error(response.data.message || 'Failed to get OAuth URL');
             }
-        } catch (err) {
-            console.error('Meta callback error:', err);
-            toast.error('Failed to connect WhatsApp Business');
-        } finally {
+            
+        } catch (error) {
+            console.error('Connect error:', error);
+            
+            if (error.response?.data?.upgrade) {
+                toast.error('Please upgrade your plan to connect more accounts');
+            } else {
+                toast.error(error.response?.data?.message || 'Failed to connect');
+            }
+            
             setConnecting(false);
         }
-    };
-
-    const connectMeta = () => {
-        const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
-            `client_id=${META_APP_ID}` +
-            `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-            `&scope=${encodeURIComponent(META_SCOPES)}` +
-            `&response_type=code` +
-            `&state=${tenant?.apiKey}`;
-        
-        window.location.href = authUrl;
     };
 
     useEffect(() => {

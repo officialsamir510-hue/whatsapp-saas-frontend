@@ -1,16 +1,40 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import api from '../services/api';
 
 export default function DashboardLayout() {
     const { user, tenant, logout } = useAuthStore();
     const navigate = useNavigate();
+    const [whatsappAccounts, setWhatsappAccounts] = useState([]);
+    const [apiKeysCount, setApiKeysCount] = useState(0);
 
     // Debug: Check user data
     useEffect(() => {
         console.log('👤 Current User:', user);
         console.log('🔥 Is Super Admin:', user?.isSuperAdmin);
+    }, [user]);
+
+    // Fetch counts for badges
+    useEffect(() => {
+        const fetchCounts = async () => {
+            if (user?.isSuperAdmin) return;
+            
+            try {
+                // Fetch WhatsApp accounts count
+                const accountsRes = await api.get('/whatsapp/oauth/accounts').catch(() => ({ data: { data: { accounts: [] } } }));
+                setWhatsappAccounts(accountsRes.data?.data?.accounts || []);
+
+                // Fetch API keys count
+                const keysRes = await api.get('/keys').catch(() => ({ data: { data: { apiKeys: [] } } }));
+                setApiKeysCount(keysRes.data?.data?.apiKeys?.length || 0);
+            } catch (error) {
+                console.log('Failed to fetch counts:', error);
+            }
+        };
+
+        fetchCounts();
     }, [user]);
 
     const handleLogout = () => {
@@ -35,8 +59,28 @@ export default function DashboardLayout() {
         { path: '/contacts', label: 'Contacts', icon: '👥' },
         { path: '/templates', label: 'Templates', icon: '📝' },
         { path: '/broadcast', label: 'Broadcast', icon: '📢' },
+        
+        // ==================== NEW MENU ITEMS ====================
+        { 
+            path: '/whatsapp-connect', 
+            label: 'WhatsApp Accounts', 
+            icon: '📱',
+            badge: whatsappAccounts.length || null
+        },
+        { 
+            path: '/api-keys', 
+            label: 'API Keys', 
+            icon: '🔑',
+            badge: apiKeysCount || null
+        },
+        { 
+            path: '/api-docs', 
+            label: 'API Docs', 
+            icon: '📚' 
+        },
+        // ==================== END NEW ITEMS ====================
+        
         { path: '/users', label: 'Team', icon: '👨‍💼' },
-        { path: '/api-docs', label: 'API Docs', icon: '📚' },
         { path: '/billing', label: 'Billing', icon: '💳' },
         { path: '/settings', label: 'Settings', icon: '⚙️' },
     ];
@@ -72,12 +116,50 @@ export default function DashboardLayout() {
                                     }
                                 >
                                     <span className="text-xl">{item.icon}</span>
-                                    <span>{item.label}</span>
+                                    <span className="flex-1">{item.label}</span>
+                                    {/* Badge for counts */}
+                                    {item.badge && (
+                                        <span className="bg-green-100 text-green-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                            {item.badge}
+                                        </span>
+                                    )}
                                 </NavLink>
                             </li>
                         ))}
                     </ul>
                 </nav>
+
+                {/* WhatsApp Connection Status - Only for normal users */}
+                {!user?.isSuperAdmin && (
+                    <div className="px-4 pb-2">
+                        <div className={`rounded-lg p-3 ${
+                            whatsappAccounts.length > 0 
+                                ? 'bg-green-50 border border-green-200' 
+                                : 'bg-orange-50 border border-orange-200'
+                        }`}>
+                            <div className="flex items-center gap-2">
+                                {whatsappAccounts.length > 0 ? (
+                                    <>
+                                        <span className="text-green-600">✅</span>
+                                        <span className="text-sm text-green-700 font-medium">
+                                            WhatsApp Connected
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-orange-600">⚠️</span>
+                                        <NavLink 
+                                            to="/whatsapp-connect"
+                                            className="text-sm text-orange-700 font-medium hover:underline"
+                                        >
+                                            Connect WhatsApp
+                                        </NavLink>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Credits Info - Only for normal users */}
                 {!user?.isSuperAdmin && (
@@ -144,6 +226,18 @@ export default function DashboardLayout() {
                             </p>
                         </div>
                         <div className="flex items-center gap-4">
+                            {/* WhatsApp Status Badge */}
+                            {!user?.isSuperAdmin && (
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                    whatsappAccounts.length > 0
+                                        ? 'bg-green-100 text-green-700'
+                                        : 'bg-orange-100 text-orange-700'
+                                }`}>
+                                    {whatsappAccounts.length > 0 ? '📱 Connected' : '📱 Not Connected'}
+                                </span>
+                            )}
+                            
+                            {/* Plan Badge */}
                             <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${
                                 user?.isSuperAdmin 
                                     ? 'bg-red-100 text-red-700'
